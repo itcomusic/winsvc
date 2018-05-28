@@ -3,9 +3,10 @@
 package winsvc
 
 import (
-	"svc/mgr"
 	"time"
 	"unsafe"
+
+	"github.com/itcomusic/winsvc/internal/svc/mgr"
 
 	"golang.org/x/sys/windows"
 )

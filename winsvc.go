@@ -11,8 +11,9 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
-	"svc/mgr"
 	"time"
+
+	"github.com/itcomusic/winsvc/internal/svc/mgr"
 
 	"context"
 
