@@ -7,7 +7,7 @@ For using this flag, must run `winsvc.RunCmd()`, which will read `-winsvc` flag 
 - Restarts service on failure. `winsvc.Config` has parameter `RestartOnFailure` which not must equal zero value for restarting.
 - `context.CancelFunc` for graceful self shutdown.
 - Kills process if it is stopping for a long time. `winsvc.Config` has parameter `TimeoutStop` which it default equals value setting in registry.
-- Catchs panic and prints stack trace using default logger.
+- Prints stack trace using default logger.
 - Package uses os.Chdir for easy using relative path.
 
 ### Install
