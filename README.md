@@ -11,7 +11,7 @@ For using this flag, must run `winsvc.RunCmd()`, which will read `-winsvc` flag 
 - Package uses os.Chdir for easy using relative path.
 
 ### Install
-```get -u github.com/itcomusic/winsvc```
+```go get -u github.com/itcomusic/winsvc```
 
 ### Example
 ```go
