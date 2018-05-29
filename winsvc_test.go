@@ -4,6 +4,7 @@ package winsvc
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"testing"
@@ -12,15 +13,11 @@ import (
 
 type service struct {
 	Servicer
-	startFunc func(cancel context.CancelFunc)
-	stopFunc  func()
+	runFunc func(ctx context.Context) error
 }
 
-func (s *service) Start(cancel context.CancelFunc) {
-	s.startFunc(cancel)
-}
-func (s *service) Stop() {
-	s.stopFunc()
+func (s *service) Run(ctx context.Context) error {
+	return s.runFunc(ctx)
 }
 
 var testsvc = &service{}
@@ -35,19 +32,18 @@ func TestRunInterrupt(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	testsvc.startFunc = func(_ context.CancelFunc) {
+	ctxTest, cancelTest := context.WithCancel(context.Background())
+	testsvc.runFunc = func(ctx context.Context) error {
 		<-ctx.Done()
-	}
-	testsvc.stopFunc = func() {
-		cancel()
+		cancelTest()
+		return nil
 	}
 
 	go func() {
 		select {
 		case <-time.After(time.Second * 5):
 			t.Fatal("service has not been stopped")
-		case <-ctx.Done():
+		case <-ctxTest.Done():
 		}
 	}()
 
@@ -58,23 +54,25 @@ func TestRunInterrupt(t *testing.T) {
 
 func TestRunCancelFunc(t *testing.T) {
 	signalNotify = signal.Notify
-	ctx, cancel := context.WithCancel(context.Background())
-	testsvc.startFunc = func(cancelInner context.CancelFunc) {
-		defer cancelInner()
-	}
-	testsvc.stopFunc = func() {
-		cancel()
-	}
+	testsvc.runFunc = func(_ context.Context) error { return nil }
 
 	go func() {
 		select {
 		case <-time.After(time.Second * 5):
 			t.Fatal("service has not been stopped")
-		case <-ctx.Done():
 		}
 	}()
 
 	if err := Run(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReturnError(t *testing.T) {
+	signalNotify = signal.Notify
+	testsvc.runFunc = func(_ context.Context) error { return fmt.Errorf("test error") }
+
+	if err := Run(); err != nil && err.Error() != "test error" {
 		t.Fatal(err)
 	}
 }

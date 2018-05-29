@@ -21,6 +21,8 @@ import (
 
 	"log"
 
+	"sync"
+
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 )
@@ -122,35 +124,38 @@ func (c Config) execPath() (string, error) {
 }
 
 // Servicer is the interface implemented by types that can start as windows service.
-// Start runs before the hosting process is granted control and Stop runs when control is returned.
 //
 //   1. OS service manager executes user program.
 //   2. User program sees it is executed from a service manager (when IsInteractive is false).
-//   3. User program calls ServiceManager.Run() which blocks.
-//   4. Servicer.Start() is called and quickly returns.
+//   3. User program calls winsvc.Run() which is blocked.
+//   4. Servicer.Run() is called.
 //   5. User program runs.
-//   6. OS service manager signals the user program to Stop.
-//   7. Servicer.Stop() is called and quickly returns.
-// 		For a successful exit, os.Exit should not be called in Interface.Stop().
-//   8. ServiceManager.Run returns.
+//   6. OS service manager signals the user program to stop.
+//   7. Context was canceled.
+//   8. winsvc.Run returns.
 //   9. User program should quickly exit.
 type Servicer interface {
-	// Start provides a place to initiate the service.
-	// Start function always has blocked and is not controlled by OS service manager.
-	// Start should not call os.Exit directly in the function, must use context.CancelFunc to stop service.
-	Start(cancel context.CancelFunc)
-	// Stop provides a place to clean up program execution before it is terminated.
-	// It should not take more time. Stop should not call os.Exit directly in the function.
-	Stop()
+	// Run provides a place to initiate the service.
+	// Run function always has blocked and exit from it, means that service will be stopped correctly.
+	// Run should not call os.Exit directly in the function, it is not correctly service stop and service will be
+	// restarted if "RestartOnFailure" option is enabled.
+	// Context canceled it is mean that signal of stop got and need to stop Run function.
+	Run(ctx context.Context) error
 }
 
 var svcMan *manager
+
+type errorSvc struct {
+	sync.RWMutex
+	err error
+}
 
 type manager struct {
 	Config
 	svc       Servicer
 	ctxSvc    context.Context
 	cancelSvc context.CancelFunc
+	errRun    *errorSvc
 	// svc.Handler is controlled OS service manager
 	svc.Handler
 }
@@ -166,8 +171,23 @@ func Init(service Servicer, c Config) error {
 	svcMan = &manager{
 		Config: c,
 		svc:    service,
+		errRun: &errorSvc{
+			sync.RWMutex{},
+			nil,
+		},
 	}
 	return nil
+}
+
+func (m *manager) setError(err error) {
+	m.errRun.Lock()
+	defer m.errRun.Unlock()
+	m.errRun.err = err
+}
+func (m *manager) getError() error {
+	m.errRun.RLock()
+	defer m.errRun.RUnlock()
+	return m.errRun.err
 }
 
 // RunCmd executions command of the flag "winsvc".
@@ -180,43 +200,49 @@ func RunCmd() error {
 }
 
 // Run starts service and should be called shortly after the program entry point.
-// After Stop has finished running, function Run will stop blocking.
+// After finished running, function Run will stop blocking.
 // After stops blocking, the program must exit shortly after.
 func Run() error {
 	if svcMan == nil {
 		return ErrSvcInit
 	}
 	svcMan.ctxSvc, svcMan.cancelSvc = context.WithCancel(context.Background())
+
 	if !interactive {
-		if err := svc.Run(svcMan.Name, svcMan); err != nil {
-			return err
+		errRun := svc.Run(svcMan.Name, svcMan)
+		if errSvc := svcMan.getError(); errSvc != nil {
+			return errSvc
 		}
-		return nil
+		return errRun
 	}
-	go svcMan.svc.Start(svcMan.cancelSvc)
+
+	finishRun := svcMan.runFuncWithNotify()
+
 	// waiting interrupt signal in interactive mode or cancel context
 	sig := make(chan os.Signal, 2)
 	signalNotify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-sig:
-	case <-svcMan.ctxSvc.Done():
+		svcMan.cancelSvc()
+	case <-finishRun:
 	}
 
 	select {
-	case <-svcMan.stopFuncWithNotify():
+	case <-finishRun:
 	case <-time.After(svcMan.TimeoutStop):
 	}
-	return nil
+	return svcMan.getError()
 }
 
-func (m *manager) stopFuncWithNotify() <-chan struct{} {
-	ctxStop, executed := context.WithCancel(context.Background())
+// runFuncWithNotify returns context which will done when run function is stopped.
+func (m *manager) runFuncWithNotify() <-chan struct{} {
+	finishRun, cancelRun := context.WithCancel(context.Background())
 	go func() {
-		defer executed()
+		defer cancelRun()
 		defer m.recoverer()
-		m.svc.Stop()
+		m.setError(m.svc.Run(m.ctxSvc))
 	}()
-	return ctxStop.Done()
+	return finishRun.Done()
 }
 
 // Install creates new service and setups up the given service in the OS service manager.
@@ -383,8 +409,7 @@ func Restart() error {
 }
 
 // recoverer recovers panic and prints error and stack trace in log.
-// With the option "RestartOnFailure" enabled: if panic happened in stop function, service will not be restarted
-// but in other cases service will be restarted.
+// With the option "RestartOnFailure" enabled: if panic happened in run function, service will not be restarted.
 func (m *manager) recoverer() {
 	if rvr := recover(); rvr != nil {
 		log.Printf("panic: %s\n\n%s", rvr, debug.Stack())
@@ -400,14 +425,10 @@ func (m *manager) recoverer() {
 func (m *manager) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	const cmdAccepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
-
-	go func() {
-		defer m.recoverer()
-		m.svc.Start(m.cancelSvc)
-	}()
+	finishRun := m.runFuncWithNotify()
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdAccepted}
-	forceStop := m.ctxSvc.Done()
+	forceStop := finishRun
 loop:
 	for {
 		select {
@@ -420,9 +441,9 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-				m.cancelSvc() // it need for handler panic
+				m.cancelSvc() // cancel context svc
 				select {
-				case <-m.stopFuncWithNotify():
+				case <-finishRun:
 				case <-time.After(m.TimeoutStop):
 				}
 				break loop
