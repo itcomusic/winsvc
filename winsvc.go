@@ -191,12 +191,12 @@ func (m *manager) getError() error {
 }
 
 // RunCmd executions command of the flag "winsvc".
-func RunCmd() error {
-	handler, err := cmdHandler()
+func RunCmd() (Command, error) {
+	handler, cmd, err := cmdHandler()
 	if err != nil {
-		return err
+		return cmd, err
 	}
-	return handler()
+	return cmd, handler()
 }
 
 // Run starts service and should be called shortly after the program entry point.

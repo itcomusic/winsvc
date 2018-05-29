@@ -43,8 +43,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err := winsvc.RunCmd()
-	log.Printf("[WARN] http server terminated, %s", err)
+	cmd, err := winsvc.RunCmd()
+	if cmd == winsvc.CmdRun {
+		log.Printf("[WARN] http server terminated, %s", err)
+		return
+	}
+	if err != nil {
+		log.Printf("[WARN] failed, %s", err)
+	}
+
 }
 
 func New() *Application {
