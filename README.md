@@ -44,14 +44,13 @@ func main() {
 	}
 
 	cmd, err := winsvc.RunCmd()
-	if cmd == winsvc.CmdRun {
-		log.Printf("[WARN] http server terminated, %s", err)
-		return
-	}
-	if err != nil {
-		log.Printf("[WARN] failed, %s", err)
-	}
-
+	if cmd != winsvc.CmdRun {
+    	if err != nil {
+    	    log.Fatalf("[ERROR] %s", err)
+    	}
+    	return
+    }
+    log.Printf("[WARN] rest terminated, %s", err)
 }
 
 func New() *Application {
