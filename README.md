@@ -45,12 +45,12 @@ func main() {
 
 	cmd, err := winsvc.RunCmd()
 	if cmd != winsvc.CmdRun {
-    	if err != nil {
-    	    log.Fatalf("[ERROR] %s", err)
+    		if err != nil {
+    	    		log.Fatalf("[ERROR] %s", err)
+    		}
+    		return
     	}
-    	return
-    }
-    log.Printf("[WARN] rest terminated, %s", err)
+    	log.Printf("[WARN] rest terminated, %s", err)
 }
 
 func New() *Application {
