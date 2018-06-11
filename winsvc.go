@@ -219,7 +219,7 @@ func Run() error {
 	finishRun := svcMan.runFuncWithNotify()
 
 	// waiting interrupt signal in interactive mode or cancel context
-	sig := make(chan os.Signal, 2)
+	sig := make(chan os.Signal, 1)
 	signalNotify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-sig:
