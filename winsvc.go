@@ -5,24 +5,19 @@
 package winsvc
 
 import (
+	"context"
 	"errors"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/itcomusic/winsvc/internal/svc/mgr"
-
-	"context"
-
-	"syscall"
-
-	"log"
-
-	"sync"
-
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 )
