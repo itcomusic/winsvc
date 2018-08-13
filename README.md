@@ -1,10 +1,10 @@
 # winsvc
-Provides creating and running Go programs as windows service
+Provides creating and running Go Windows Service
 
 ### Features
 - In package was set flag `winsvc` that control service (install, start, restart, stop, uninstall) and no need explicit realize flag and logic.
 For using this flag, must run `winsvc.RunCmd()`, which will read `-winsvc` flag and execute specific command.
-- Restarts service on failure. `winsvc.Config` has parameter `RestartOnFailure` which not must equal zero value for restarting.
+- Restarts service on failure. `winsvc.Config` has parameter `RestartOnFailure` which not must equal zero value for restarting. If exit from Run function had happened before context execution canceled(command of the stop was not sent) service also will be restarted.
 - `context.Context` for graceful self shutdown.
 - Kills process if it is stopping for a long time. `winsvc.Config` has parameter `TimeoutStop` which it default equals value setting in registry.
 - Package uses os.Chdir for easy using relative path.

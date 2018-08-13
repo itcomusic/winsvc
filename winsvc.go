@@ -423,13 +423,12 @@ func (m *manager) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	finishRun := m.runFuncWithNotify()
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdAccepted}
-	forceStop := finishRun
 loop:
 	for {
 		select {
-		case <-forceStop:
-			forceStop = nil // one-shot
-			m.sendCmdStop()
+		// unexpected exit from run function
+		case <-finishRun:
+			return true, 1
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Interrogate:
