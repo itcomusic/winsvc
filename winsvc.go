@@ -210,7 +210,6 @@ func Run() error {
 		}
 		return errRun
 	}
-
 	finishRun := svcMan.runFuncWithNotify()
 
 	// waiting interrupt signal in interactive mode or cancel context
@@ -445,21 +444,4 @@ loop:
 		}
 	}
 	return false, 0
-}
-
-// sendCmdStop sends command to OS service manager to stop service.
-func (m *manager) sendCmdStop() error {
-	mg, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer mg.Disconnect()
-
-	s, err := mg.OpenService(m.Name)
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-	_, err = s.Control(svc.Stop)
-	return err
 }

@@ -11,8 +11,8 @@ import (
 type Command int
 
 const (
-	CmdUnknown Command = -1
-	CmdStart           = iota
+	CmdUnknown Command = iota
+	CmdStart
 	CmdStop
 	CmdRestart
 	CmdInstall
@@ -23,22 +23,18 @@ const (
 var (
 	flagSvc = flag.NewFlagSet("winsvc", flag.ContinueOnError)
 	action  *string
+
 	// actionHandler is a list valid actions and functions to use in cmdHandler.
-	actionHandler = map[string]func() error{
-		"start":     Start,
-		"stop":      Stop,
-		"restart":   Restart,
-		"install":   Install,
-		"uninstall": Uninstall,
-		"run":       Run,
-	}
-	actionCommand = map[string]Command{
-		"start":     CmdStart,
-		"stop":      CmdStop,
-		"restart":   CmdRestart,
-		"install":   CmdInstall,
-		"uninstall": CmdUninstall,
-		"run":       CmdRun,
+	actionHandler = map[string]struct {
+		f   func() error
+		cmd Command
+	}{
+		"start":     {Start, CmdStart},
+		"stop":      {Stop, CmdStop},
+		"restart":   {Restart, CmdRestart},
+		"install":   {Install, CmdInstall},
+		"uninstall": {Uninstall, CmdUninstall},
+		"run":       {Run, CmdRun},
 	}
 )
 
@@ -54,6 +50,5 @@ func cmdHandler() (func() error, Command, error) {
 	if !ok {
 		return nil, CmdUnknown, ErrCmd
 	}
-	cmd := actionCommand[*action]
-	return h, cmd, nil
+	return h.f, h.cmd, nil
 }
