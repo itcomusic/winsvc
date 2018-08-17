@@ -138,6 +138,8 @@ type Servicer interface {
 	Run(ctx context.Context) error
 }
 
+type handlerFunc func(ctx context.Context) error
+
 var svcMan *manager
 
 type errorSvc struct {
@@ -147,29 +149,48 @@ type errorSvc struct {
 
 type manager struct {
 	Config
-	svc       Servicer
-	ctxSvc    context.Context
-	cancelSvc context.CancelFunc
-	errRun    *errorSvc
-	// svc.Handler is controlled OS service manager
+	svcHandler handlerFunc
+	ctxSvc     context.Context
+	cancelSvc  context.CancelFunc
+	errRun     *errorSvc
+	// svcHandler.Handler is controlled OS service manager
 	svc.Handler
 }
 
 // Init initializes new windows service based on a Servicer and configuration.
-func Init(service Servicer, c Config) error {
+func Init(c Config, service handlerFunc) error {
 	if len(c.Name) == 0 {
 		return ErrEmptyName
 	}
+
 	if c.TimeoutStop == 0 {
 		c.TimeoutStop = timeStopDefault
 	}
+
 	svcMan = &manager{
-		Config: c,
-		svc:    service,
+		Config:     c,
+		svcHandler: service,
 		errRun: &errorSvc{
 			sync.RWMutex{},
 			nil,
 		},
+	}
+
+	// executions command of the flag "winsvc"
+	handler, cmd, err := cmdHandler()
+	if err != nil {
+		return err
+	}
+
+	switch cmd {
+	case CmdInstall, CmdUninstall, CmdStart, CmdStop, CmdRestart:
+		return handler()
+		os.Exit(0)
+	case CmdRun:
+		return handler()
+		os.Exit(0)
+	default:
+		panic("wat")
 	}
 	return nil
 }
@@ -185,8 +206,8 @@ func (m *manager) getError() error {
 	return m.errRun.err
 }
 
-// RunCmd executions command of the flag "winsvc".
-func RunCmd() (Command, error) {
+// runCmd executions command of the flag "winsvc".
+func runCmd() (Command, error) {
 	handler, cmd, err := cmdHandler()
 	if err != nil {
 		return cmd, err
@@ -234,7 +255,7 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	go func() {
 		defer cancelRun()
 		defer m.recoverer()
-		m.setError(m.svc.Run(m.ctxSvc))
+		m.setError(m.svcHandler(m.ctxSvc))
 	}()
 	return finishRun.Done()
 }
@@ -434,7 +455,7 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-				m.cancelSvc() // cancel context svc
+				m.cancelSvc() // cancel context svcHandler
 				select {
 				case <-finishRun:
 				case <-time.After(m.TimeoutStop):
