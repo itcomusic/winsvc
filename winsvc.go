@@ -7,6 +7,7 @@ package winsvc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -20,20 +21,19 @@ import (
 	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
-	"fmt"
 )
 
 var (
 	// errEmptyName is an error returned by invalid config of service name.
-	errEmptyName = errors.New("winsvc: name field is required")
+	errEmptyName = errors.New("name field is required")
 	// errSvcInit is an error returned by action with not initialized service.
-	errSvcInit = errors.New("winsvc: service was not initialized")
+	errSvcInit = errors.New("service was not initialized")
 	// errExist is an error returned by try install existing service.
-	errExist = errors.New("winsvc: service has already existed")
+	errExist = errors.New("service has already existed")
 	// errNotExist is an error returned by try uninstall not existent service.
-	errNotExist = errors.New("winsvc: service was not installed")
+	errNotExist = errors.New("service was not installed")
 	// errCmd is an error returned by unknown value command "winsvc".
-	errCmd = errors.New("winsvc: unknown action")
+	errCmd = errors.New("unknown action")
 )
 
 var (
@@ -182,7 +182,7 @@ func Init(c Config, run runFunc) error {
 	switch cmd {
 	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdUnknown:
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("winsvc: %s", err)
 		}
 		os.Exit(0)
 	case cmdRun:
@@ -300,7 +300,7 @@ func (m *manager) install() error {
 		ServiceStartName: m.Username,
 		Password:         m.Password,
 		Dependencies:     m.Dependencies,
-	}, append(m.Arguments, "-winsvc run")...)
+	}, append(m.Arguments, "-winsvc", "run")...)
 	if err != nil {
 		return err
 	}
