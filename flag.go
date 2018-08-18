@@ -7,19 +7,18 @@ import (
 	"io/ioutil"
 	"os"
 
-	"golang.org/x/sys/windows/svc"
-)
+	)
 
-type Command int
+type command int
 
 const (
-	CmdUnknown Command = iota
-	CmdStart
-	CmdStop
-	CmdRestart
-	CmdInstall
-	CmdUninstall
-	CmdRun
+	cmdUnknown command = iota
+	cmdStart
+	cmdStop
+	cmdRestart
+	cmdInstall
+	cmdUninstall
+	cmdRun
 )
 
 var (
@@ -29,14 +28,15 @@ var (
 	// actionHandler is a list valid actions and functions to use in cmdHandler.
 	actionHandler = map[string]struct {
 		f   func() error
-		cmd Command
+		cmd command
 	}{
-		"start":     {Start, CmdStart},
-		"stop":      {Stop, CmdStop},
-		"restart":   {Restart, CmdRestart},
-		"install":   {Install, CmdInstall},
-		"uninstall": {Uninstall, CmdUninstall},
-		"run":       {Run, CmdRun},
+		"start":     {start, cmdStart},
+		"stop":      {stop, cmdStop},
+		"restart":   {restart, cmdRestart},
+		"install":   {install, cmdInstall},
+		"uninstall": {uninstall, cmdUninstall},
+		"run":       {run, cmdRun},
+		// todo: -h
 	}
 )
 
@@ -47,22 +47,10 @@ func init() {
 }
 
 // cmdHandler returns function from a given action command string.
-func cmdHandler() (func() error, Command, error) {
-	isInteractive, err := svc.IsAnInteractiveSession()
-	if err != nil {
-		return nil, CmdUnknown, err
-	}
-
+func cmdHandler() (func() error, command, error) {
 	h, ok := actionHandler[*action]
 	if !ok {
-		if !isInteractive {
-			return nil, CmdUnknown, ErrCmd
-		}
-
-		if *action == "" {
-			h.cmd = CmdRun
-		}
-
+		return nil, cmdUnknown, errCmd
 	}
 
 	return h.f, h.cmd, nil
