@@ -4,11 +4,11 @@ package winsvc
 
 import (
 	"context"
-		"os"
-		"testing"
-	"time"
-	"os/signal"
 	"fmt"
+	"os"
+	"os/signal"
+	"testing"
+	"time"
 )
 
 func init() {
@@ -31,12 +31,12 @@ func TestRunInterrupt(t *testing.T) {
 		}
 	}()
 
-	err := Init(Config{Name:"test"},
-	func(ctx context.Context) error {
-		<-ctx.Done()
-		cancelTest()
-		return nil
-	})
+	err := Init(Config{Name: "test"},
+		func(ctx context.Context) error {
+			<-ctx.Done()
+			cancelTest()
+			return nil
+		})
 
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestRunCancelFunc(t *testing.T) {
 		}
 	}()
 
-	err := Init(Config{Name:"test"}, func(_ context.Context) error { return nil })
+	err := Init(Config{Name: "test"}, func(_ context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestRunCancelFunc(t *testing.T) {
 
 func TestReturnError(t *testing.T) {
 	signalNotify = signal.Notify
-	err := Init(Config{Name:"test"}, func(_ context.Context) error { return fmt.Errorf("test error") })
+	err := Init(Config{Name: "test"}, func(_ context.Context) error { return fmt.Errorf("test error") })
 	if err != nil && err.Error() != "test error" {
 		t.Fatal(err)
 	}

@@ -67,7 +67,7 @@ func init() {
 	timeStopDefault = getStopTimeout()
 }
 
-// getStopTimeout fetches the time before windows will kill the service, but it is not working.
+// getStopTimeout fetches the time before process will be finished.
 func getStopTimeout() time.Duration {
 	defaultTimeout := time.Millisecond * 20000
 
@@ -197,6 +197,7 @@ func (m *manager) setError(err error) {
 	defer m.errRun.Unlock()
 	m.errRun.err = err
 }
+
 func (m *manager) getError() error {
 	m.errRun.RLock()
 	defer m.errRun.RUnlock()
@@ -315,20 +316,24 @@ func uninstall() error {
 	if svcMan == nil {
 		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
 	}
 	defer mg.Disconnect()
+
 	s, err := mg.OpenService(svcMan.Name)
 	if err != nil {
 		return errNotExist
 	}
 	defer s.Close()
+
 	err = s.Delete()
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -337,6 +342,7 @@ func start() error {
 	if svcMan == nil {
 		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -348,6 +354,7 @@ func start() error {
 		return err
 	}
 	defer s.Close()
+
 	return s.Start()
 }
 
@@ -356,6 +363,7 @@ func stop() error {
 	if svcMan == nil {
 		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -372,12 +380,12 @@ func stop() error {
 }
 
 func (m *manager) stopWithWait(s *mgr.Service) error {
-	// First stop the service. Then wait for the service to
-	// actually stop before starting it.
+	// first stop the service. Then wait for the service to actually stop before starting it
 	status, err := s.Control(svc.Stop)
 	if err != nil {
 		return err
 	}
+
 	timeDuration := time.Millisecond * 50
 	timeout := time.After(timeStopDefault + (timeDuration * 2))
 	tick := time.NewTicker(timeDuration)
@@ -395,10 +403,11 @@ loop:
 			break loop
 		}
 	}
+
 	return nil
 }
 
-// restart restarts service. restart signals to the OS service manager the given service should stop then start.
+// restart restarts service. Restart signals to the OS service manager the given service should stop then start.
 func restart() error {
 	if svcMan == nil {
 		return errSvcInit

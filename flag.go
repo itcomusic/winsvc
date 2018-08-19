@@ -6,8 +6,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
-
-	)
+)
 
 type command int
 
@@ -36,7 +35,7 @@ var (
 		"install":   {install, cmdInstall},
 		"uninstall": {uninstall, cmdUninstall},
 		"run":       {run, cmdRun},
-		// todo: -h
+		// TODO: -h
 	}
 )
 
