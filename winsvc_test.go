@@ -11,19 +11,9 @@ import (
 	"time"
 )
 
-type service struct {
-	Servicer
-	runFunc func(ctx context.Context) error
+func init() {
+	*action = "run"
 }
-
-func (s *service) Run(ctx context.Context) error {
-	return s.runFunc(ctx)
-}
-
-var testsvc = &service{}
-var _ = Init(testsvc, Config{
-	Name: "ServiceTest",
-})
 
 func TestRunInterrupt(t *testing.T) {
 	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) {
@@ -33,12 +23,6 @@ func TestRunInterrupt(t *testing.T) {
 	}
 
 	ctxTest, cancelTest := context.WithCancel(context.Background())
-	testsvc.runFunc = func(ctx context.Context) error {
-		<-ctx.Done()
-		cancelTest()
-		return nil
-	}
-
 	go func() {
 		select {
 		case <-time.After(time.Second * 5):
@@ -47,15 +31,20 @@ func TestRunInterrupt(t *testing.T) {
 		}
 	}()
 
-	if err := Run(); err != nil {
+	err := Init(Config{Name: "test"},
+		func(ctx context.Context) error {
+			<-ctx.Done()
+			cancelTest()
+			return nil
+		})
+
+	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRunCancelFunc(t *testing.T) {
 	signalNotify = signal.Notify
-	testsvc.runFunc = func(_ context.Context) error { return nil }
-
 	go func() {
 		select {
 		case <-time.After(time.Second * 5):
@@ -63,16 +52,16 @@ func TestRunCancelFunc(t *testing.T) {
 		}
 	}()
 
-	if err := Run(); err != nil {
+	err := Init(Config{Name: "test"}, func(_ context.Context) error { return nil })
+	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestReturnError(t *testing.T) {
 	signalNotify = signal.Notify
-	testsvc.runFunc = func(_ context.Context) error { return fmt.Errorf("test error") }
-
-	if err := Run(); err != nil && err.Error() != "test error" {
+	err := Init(Config{Name: "test"}, func(_ context.Context) error { return fmt.Errorf("test error") })
+	if err != nil && err.Error() != "test error" {
 		t.Fatal(err)
 	}
 }

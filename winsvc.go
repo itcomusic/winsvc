@@ -7,6 +7,7 @@ package winsvc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -23,16 +24,16 @@ import (
 )
 
 var (
-	// ErrEmptyName is an error returned by invalid config of service name.
-	ErrEmptyName = errors.New("name field is required")
-	// ErrSvcInit is an error returned by action with not initialized service.
-	ErrSvcInit = errors.New("service was not initialized")
-	// ErrExist is an error returned by try install existing service.
-	ErrExist = errors.New("service has already existed")
-	// ErrNotExist is an error returned by try uninstall not existent service.
-	ErrNotExist = errors.New("service was not installed")
-	// ErrCmd is an error returned by unknown value command "winsvc".
-	ErrCmd = errors.New("unknown action")
+	// errEmptyName is an error returned by invalid config of service name.
+	errEmptyName = errors.New("name field is required")
+	// errSvcInit is an error returned by action with not initialized service.
+	errSvcInit = errors.New("service was not initialized")
+	// errExist is an error returned by try install existing service.
+	errExist = errors.New("service has already existed")
+	// errNotExist is an error returned by try uninstall not existent service.
+	errNotExist = errors.New("service was not installed")
+	// errCmd is an error returned by unknown value command "winsvc".
+	errCmd = errors.New("unknown action")
 )
 
 var (
@@ -62,24 +63,29 @@ func init() {
 	if errIn != nil {
 		panic(errIn)
 	}
+
 	timeStopDefault = getStopTimeout()
 }
 
-// getStopTimeout fetches the time before windows will kill the service, but it is not working.
+// getStopTimeout fetches the time before process will be finished.
 func getStopTimeout() time.Duration {
 	defaultTimeout := time.Millisecond * 20000
+
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Control`, registry.READ)
 	if err != nil {
 		return defaultTimeout
 	}
+
 	sv, _, err := key.GetStringValue("WaitToKillServiceTimeout")
 	if err != nil {
 		return defaultTimeout
 	}
+
 	v, err := strconv.Atoi(sv)
 	if err != nil {
 		return defaultTimeout
 	}
+
 	return time.Millisecond * time.Duration(v)
 }
 
@@ -118,25 +124,18 @@ func (c Config) execPath() (string, error) {
 	return os.Executable()
 }
 
-// Servicer is the interface implemented by types that can start as windows service.
+// runFunc is the function that can start as windows service.
 //
 //   1. OS service manager executes user program.
-//   2. User program sees it is executed from a service manager (when IsInteractive is false).
-//   3. User program calls winsvc.Run() which is blocked.
-//   4. Servicer.Run() is called.
+//   2. User program sees it is executed from a service manager (when Interactive() is false).
+//   3. User program calls winsvc.Init(...) which is blocked.
+//   4. runFunc is called.
 //   5. User program runs.
 //   6. OS service manager signals the user program to stop.
 //   7. Context was canceled.
-//   8. winsvc.Run returns.
+//   8. winsvc.Init returns.
 //   9. User program should quickly exit.
-type Servicer interface {
-	// Run provides a place to initiate the service.
-	// Run function always has blocked and exit from it, means that service will be stopped correctly.
-	// Run should not call os.Exit directly in the function, it is not correctly service stop and service will be
-	// restarted if "RestartOnFailure" option is enabled.
-	// Context canceled it is mean that signal of stop got and need to stop Run function.
-	Run(ctx context.Context) error
-}
+type runFunc func(ctx context.Context) error
 
 var svcMan *manager
 
@@ -147,31 +146,50 @@ type errorSvc struct {
 
 type manager struct {
 	Config
-	svc       Servicer
-	ctxSvc    context.Context
-	cancelSvc context.CancelFunc
-	errRun    *errorSvc
-	// svc.Handler is controlled OS service manager
+	svcHandler runFunc
+	ctxSvc     context.Context
+	cancelSvc  context.CancelFunc
+	errRun     *errorSvc
+	// svcHandler.Handler is controlled OS service manager
 	svc.Handler
 }
 
-// Init initializes new windows service based on a Servicer and configuration.
-func Init(service Servicer, c Config) error {
+// Init initializes new windows service and runs command action.
+// runFunc provides a place to initiate the service.
+// runFunc function always has blocked and exit from it, means that service will be stopped correctly if is context was canceled.
+// runFunc should not call os.Exit directly in the function, it is not correctly service stop and service will be
+// restarted if "RestartOnFailure" option is enabled.
+// Context canceled it is mean that signal of stop got and need to stop run function.
+func Init(c Config, run runFunc) error {
 	if len(c.Name) == 0 {
-		return ErrEmptyName
+		log.Fatal(errEmptyName)
 	}
+
 	if c.TimeoutStop == 0 {
 		c.TimeoutStop = timeStopDefault
 	}
+
 	svcMan = &manager{
-		Config: c,
-		svc:    service,
+		Config:     c,
+		svcHandler: run,
 		errRun: &errorSvc{
 			sync.RWMutex{},
 			nil,
 		},
 	}
-	return nil
+
+	cmd, err := runCmd()
+	switch cmd {
+	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdUnknown:
+		if err != nil {
+			log.Fatalf("winsvc: %s", err)
+		}
+		os.Exit(0)
+	case cmdRun:
+		return err
+	}
+
+	return fmt.Errorf("unreachable code")
 }
 
 func (m *manager) setError(err error) {
@@ -179,14 +197,15 @@ func (m *manager) setError(err error) {
 	defer m.errRun.Unlock()
 	m.errRun.err = err
 }
+
 func (m *manager) getError() error {
 	m.errRun.RLock()
 	defer m.errRun.RUnlock()
 	return m.errRun.err
 }
 
-// RunCmd executions command of the flag "winsvc".
-func RunCmd() (Command, error) {
+// runCmd executions command of the flag "winsvc".
+func runCmd() (command, error) {
 	handler, cmd, err := cmdHandler()
 	if err != nil {
 		return cmd, err
@@ -194,12 +213,12 @@ func RunCmd() (Command, error) {
 	return cmd, handler()
 }
 
-// Run starts service and should be called shortly after the program entry point.
-// After finished running, function Run will stop blocking.
+// run starts service.
+// After finished running, function run will stop blocking.
 // After stops blocking, the program must exit shortly after.
-func Run() error {
+func run() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
 	svcMan.ctxSvc, svcMan.cancelSvc = context.WithCancel(context.Background())
 
@@ -234,16 +253,16 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	go func() {
 		defer cancelRun()
 		defer m.recoverer()
-		m.setError(m.svc.Run(m.ctxSvc))
+		m.setError(m.svcHandler(m.ctxSvc))
 	}()
 	return finishRun.Done()
 }
 
-// Install creates new service and setups up the given service in the OS service manager.
+// install creates new service and setups up the given service in the OS service manager.
 // This may require greater rights. Will return an error if it is already installed.
-func Install() error {
+func install() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
 	if err := svcMan.install(); err != nil {
 		return err
@@ -262,15 +281,17 @@ func (m *manager) install() error {
 	if err != nil {
 		return err
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
 	}
 	defer mg.Disconnect()
+
 	s, err := mg.OpenService(m.Name)
 	if err == nil {
 		s.Close()
-		return ErrExist
+		return errExist
 	}
 
 	s, err = mg.CreateService(m.Name, path, mgr.Config{
@@ -280,42 +301,48 @@ func (m *manager) install() error {
 		ServiceStartName: m.Username,
 		Password:         m.Password,
 		Dependencies:     m.Dependencies,
-	}, m.Arguments...)
+	}, append(m.Arguments, "-winsvc", "run")...)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
+
 	return nil
 }
 
-// Uninstall removes the given service from the OS service manager.
+// uninstall removes the given service from the OS service manager.
 // This may require greater rights. Will return an error if the service is not present.
-func Uninstall() error {
+func uninstall() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
 	}
 	defer mg.Disconnect()
+
 	s, err := mg.OpenService(svcMan.Name)
 	if err != nil {
-		return ErrNotExist
+		return errNotExist
 	}
 	defer s.Close()
+
 	err = s.Delete()
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-// Start signals to the OS service manager to start service.
-func Start() error {
+// start signals to the OS service manager to start service.
+func start() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -327,14 +354,16 @@ func Start() error {
 		return err
 	}
 	defer s.Close()
+
 	return s.Start()
 }
 
-// Stop signals to the OS service manager to stop service and waits stop service.
-func Stop() error {
+// stop signals to the OS service manager to stop service and waits stop service.
+func stop() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
+
 	mg, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -351,12 +380,12 @@ func Stop() error {
 }
 
 func (m *manager) stopWithWait(s *mgr.Service) error {
-	// First Stop the service. Then wait for the service to
-	// actually stop before starting it.
+	// first stop the service. Then wait for the service to actually stop before starting it
 	status, err := s.Control(svc.Stop)
 	if err != nil {
 		return err
 	}
+
 	timeDuration := time.Millisecond * 50
 	timeout := time.After(timeStopDefault + (timeDuration * 2))
 	tick := time.NewTicker(timeDuration)
@@ -374,13 +403,14 @@ loop:
 			break loop
 		}
 	}
+
 	return nil
 }
 
-// Restart restarts service. Restart signals to the OS service manager the given service should stop then start.
-func Restart() error {
+// restart restarts service. Restart signals to the OS service manager the given service should stop then start.
+func restart() error {
 	if svcMan == nil {
-		return ErrSvcInit
+		return errSvcInit
 	}
 	mg, err := mgr.Connect()
 	if err != nil {
@@ -434,7 +464,7 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-				m.cancelSvc() // cancel context svc
+				m.cancelSvc() // cancel context svcHandler
 				select {
 				case <-finishRun:
 				case <-time.After(m.TimeoutStop):
