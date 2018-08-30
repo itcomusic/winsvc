@@ -12,8 +12,7 @@ import (
 type command int
 
 const (
-	cmdUnknown command = iota
-	cmdHelp
+	cmdHelp command = iota
 	cmdStart
 	cmdStop
 	cmdRestart
@@ -33,11 +32,6 @@ var actionHandler = map[string]struct {
 	"install":   {install, cmdInstall},
 	"uninstall": {uninstall, cmdUninstall},
 	"run":       {run, cmdRun},
-	"-h": {func() error {
-		flagSvc.SetOutput(os.Stdout)
-		flagSvc.PrintDefaults()
-		return nil
-	}, cmdHelp},
 }
 
 type cmd struct {
@@ -68,9 +62,11 @@ func (c *cmd) String() string {
 var (
 	flagSvc = flag.NewFlagSet("winsvc", flag.ContinueOnError)
 	action  = cmd{
-		typeCmd: cmdUnknown,
+		typeCmd: cmdHelp,
 		handler: func() error {
-			return errCmd
+			flagSvc.SetOutput(os.Stdout)
+			flagSvc.PrintDefaults()
+			return nil
 		},
 	}
 )
@@ -84,7 +80,7 @@ func init() {
 // runCmd executions command of the flag "winsvc".
 func runCmd() error {
 	switch action.typeCmd {
-	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdUnknown, cmdHelp:
+	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdHelp:
 		if err := action.handler(); err != nil {
 			log.Fatalf("winsvc: %s", err)
 		}
