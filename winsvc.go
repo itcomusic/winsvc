@@ -7,7 +7,6 @@ package winsvc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -178,18 +177,7 @@ func Init(c Config, run runFunc) error {
 		},
 	}
 
-	cmd, err := runCmd()
-	switch cmd {
-	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdUnknown:
-		if err != nil {
-			log.Fatalf("winsvc: %s", err)
-		}
-		os.Exit(0)
-	case cmdRun:
-		return err
-	}
-
-	return fmt.Errorf("unreachable code")
+	return runCmd()
 }
 
 func (m *manager) setError(err error) {
@@ -202,15 +190,6 @@ func (m *manager) getError() error {
 	m.errRun.RLock()
 	defer m.errRun.RUnlock()
 	return m.errRun.err
-}
-
-// runCmd executions command of the flag "winsvc".
-func runCmd() (command, error) {
-	handler, cmd, err := cmdHandler()
-	if err != nil {
-		return cmd, err
-	}
-	return cmd, handler()
 }
 
 // run starts service.
@@ -301,7 +280,7 @@ func (m *manager) install() error {
 		ServiceStartName: m.Username,
 		Password:         m.Password,
 		Dependencies:     m.Dependencies,
-	}, append(m.Arguments, "-winsvc", "run")...)
+	}, m.Arguments...)
 	if err != nil {
 		return err
 	}
