@@ -75,6 +75,7 @@ func init() {
 	// interactive false always -winsvc run
 	if !Interactive() {
 		action = cmd{
+			value:   "run",
 			typeCmd: cmdRun,
 			handler: run,
 		}
