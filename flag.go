@@ -31,7 +31,6 @@ var actionHandler = map[string]struct {
 	"install":   {install, cmdInstall},
 	"uninstall": {uninstall, cmdUninstall},
 	"run":       {run, cmdRun},
-	"-h":        {},
 }
 
 type cmd struct {
