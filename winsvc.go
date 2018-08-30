@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"io/ioutil"
+
 	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
@@ -64,6 +66,20 @@ func init() {
 	}
 
 	timeStopDefault = getStopTimeout()
+
+	// flags
+	flagSvc.SetOutput(ioutil.Discard)
+	flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
+	flagSvc.Parse(os.Args[1:])
+
+	// interactive false always -winsvc run
+	if !Interactive() {
+		action = cmd{
+			value:   "run",
+			typeCmd: cmdRun,
+			handler: run,
+		}
+	}
 }
 
 // getStopTimeout fetches the time before process will be finished.

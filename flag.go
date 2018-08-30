@@ -4,7 +4,6 @@ package winsvc
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
 	"os"
 )
@@ -32,6 +31,7 @@ var actionHandler = map[string]struct {
 	"install":   {install, cmdInstall},
 	"uninstall": {uninstall, cmdUninstall},
 	"run":       {run, cmdRun},
+	"-h":        {},
 }
 
 type cmd struct {
@@ -67,20 +67,6 @@ var (
 		},
 	}
 )
-
-func init() {
-	flagSvc.SetOutput(ioutil.Discard)
-	flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
-	flagSvc.Parse(os.Args[1:])
-	// interactive false always -winsvc run
-	if !Interactive() {
-		action = cmd{
-			value:   "run",
-			typeCmd: cmdRun,
-			handler: run,
-		}
-	}
-}
 
 // runCmd executions command of the flag "winsvc".
 func runCmd() error {
