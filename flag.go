@@ -41,10 +41,6 @@ type cmd struct {
 }
 
 func (c *cmd) Set(v string) error {
-	if v == "" && !Interactive() {
-		v = "run"
-	}
-
 	h, ok := actionHandler[v]
 	if !ok {
 		c.value = v
@@ -61,7 +57,8 @@ func (c *cmd) String() string {
 
 var (
 	flagSvc = flag.NewFlagSet("winsvc", flag.ContinueOnError)
-	action  = cmd{
+	// interactive true must explicitly specify the command -winsvc with correct command otherwise prints help
+	action = cmd{
 		typeCmd: cmdHelp,
 		handler: func() error {
 			flagSvc.SetOutput(os.Stdout)
@@ -75,6 +72,13 @@ func init() {
 	flagSvc.SetOutput(ioutil.Discard)
 	flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
 	flagSvc.Parse(os.Args[1:])
+	// interactive false always -winsvc run
+	if !Interactive() {
+		action = cmd{
+			typeCmd: cmdRun,
+			handler: run,
+		}
+	}
 }
 
 // runCmd executions command of the flag "winsvc".
