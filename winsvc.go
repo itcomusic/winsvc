@@ -72,13 +72,19 @@ func init() {
 	flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
 	flagSvc.Parse(os.Args[1:])
 
-	// interactive false always -winsvc run
-	if !Interactive() {
-		action = cmd{
-			value:   "run",
-			typeCmd: cmdRun,
-			handler: run,
+	if Interactive() {
+		if action.typeCmd == cmdHelp {
+			action.handler()
+			os.Exit(0)
 		}
+		return
+	}
+
+	// interactive false always -winsvc run
+	action = cmd{
+		value:   "run",
+		typeCmd: cmdRun,
+		handler: run,
 	}
 }
 
