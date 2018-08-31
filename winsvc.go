@@ -7,6 +7,7 @@ package winsvc
 import (
 	"context"
 	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -16,8 +17,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"io/ioutil"
 
 	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows/registry"
@@ -33,8 +32,6 @@ var (
 	errExist = errors.New("service has already existed")
 	// errNotExist is an error returned by try uninstall not existent service.
 	errNotExist = errors.New("service was not installed")
-	// errCmd is an error returned by unknown value command "winsvc".
-	errCmd = errors.New("unknown action")
 )
 
 var (
@@ -75,7 +72,7 @@ func init() {
 	if Interactive() {
 		if action.typeCmd == cmdHelp {
 			action.handler()
-			os.Exit(0)
+			os.Exit(1)
 		}
 		return
 	}
