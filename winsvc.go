@@ -70,6 +70,7 @@ func init() {
 	flagSvc.Parse(os.Args[1:])
 
 	if Interactive() {
+		// invalid command
 		if action.typeCmd == cmdHelp {
 			action.handler()
 			os.Exit(1)
@@ -462,6 +463,7 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
+
 				m.cancelSvc() // cancel context svcHandler
 				select {
 				case <-finishRun:

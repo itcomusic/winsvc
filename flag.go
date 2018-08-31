@@ -70,7 +70,7 @@ var (
 // runCmd executions command of the flag "winsvc".
 func runCmd() error {
 	switch action.typeCmd {
-	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart, cmdHelp:
+	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart:
 		if err := action.handler(); err != nil {
 			log.Fatalf("winsvc: %s", err)
 		}
