@@ -64,13 +64,21 @@ func init() {
 
 	timeStopDefault = getStopTimeout()
 
-	// flags
-	flagSvc.SetOutput(ioutil.Discard)
-	flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
-	flagSvc.Parse(os.Args[1:])
-
 	if Interactive() {
-		// invalid command
+		action = cmd{
+			typeCmd: cmdHelp,
+			handler: func() error {
+				flagSvc.SetOutput(os.Stdout)
+				flagSvc.PrintDefaults()
+				return nil
+			},
+		}
+
+		// flags
+		flagSvc.SetOutput(ioutil.Discard)
+		flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
+		flagSvc.Parse(os.Args[1:])
+
 		if action.typeCmd == cmdHelp {
 			action.handler()
 			os.Exit(1)
@@ -80,7 +88,6 @@ func init() {
 
 	// interactive false always -winsvc run
 	action = cmd{
-		value:   "run",
 		typeCmd: cmdRun,
 		handler: run,
 	}
