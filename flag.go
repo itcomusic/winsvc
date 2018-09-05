@@ -56,8 +56,10 @@ func (c *cmd) String() string {
 
 var (
 	flagSvc = flag.NewFlagSet("winsvc", flag.ContinueOnError)
-	// interactive true must explicitly specify the command -winsvc with correct command otherwise prints help
-	action cmd
+	action  = cmd{
+		typeCmd: cmdRun,
+		handler: run,
+	}
 )
 
 // runCmd executions command of the flag "winsvc".

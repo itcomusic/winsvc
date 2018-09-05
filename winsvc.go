@@ -64,6 +64,7 @@ func init() {
 
 	timeStopDefault = getStopTimeout()
 
+	// interactive true must explicitly specify the command -winsvc with correct command otherwise prints help
 	if Interactive() {
 		action = cmd{
 			typeCmd: cmdHelp,
@@ -84,12 +85,6 @@ func init() {
 			os.Exit(1)
 		}
 		return
-	}
-
-	// interactive false always -winsvc run
-	action = cmd{
-		typeCmd: cmdRun,
-		handler: run,
 	}
 }
 
