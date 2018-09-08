@@ -18,9 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 var (
@@ -46,7 +46,7 @@ func Interactive() bool {
 	return interactive
 }
 
-func init() {
+var funcInit = func() {
 	ex, errEx := os.Executable()
 	if errEx != nil {
 		panic(errEx)
@@ -86,6 +86,10 @@ func init() {
 		}
 		return
 	}
+}
+
+func init() {
+	//funcInit()
 }
 
 // getStopTimeout fetches the time before process will be finished.

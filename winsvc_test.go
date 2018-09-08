@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	action = cmd{value:"run", typeCmd: cmdRun, handler: run}
+	funcInit = func() { action = cmd{value: "run", typeCmd: cmdRun, handler: run} }
 }
 
 func TestRunInterrupt(t *testing.T) {

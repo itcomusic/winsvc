@@ -6,8 +6,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms681988(v=vs.85).aspx
