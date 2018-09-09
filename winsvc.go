@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/debug"
 	"strconv"
 	"sync"
 	"syscall"
@@ -235,7 +234,6 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	finishRun, cancelRun := context.WithCancel(context.Background())
 	go func() {
 		defer cancelRun()
-		defer m.recoverer()
 		m.setError(m.svcHandler(m.ctxSvc))
 	}()
 	return finishRun.Done()
@@ -415,19 +413,6 @@ func restart() error {
 	return s.Start()
 }
 
-// recoverer recovers panic and prints error and stack trace in log.
-// With the option "RestartOnFailure" enabled: if panic happened in run function, service will not be restarted.
-func (m *manager) recoverer() {
-	if rvr := recover(); rvr != nil {
-		log.Printf("panic: %s\n\n%s", rvr, debug.Stack())
-		select {
-		case <-m.ctxSvc.Done():
-		default:
-			os.Exit(2)
-		}
-	}
-}
-
 // Execute manages status of the service.
 func (m *manager) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	const cmdAccepted = svc.AcceptStop | svc.AcceptShutdown
@@ -447,8 +432,8 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-
 				m.cancelSvc() // cancel context svcHandler
+
 				select {
 				case <-finishRun:
 				case <-time.After(m.TimeoutStop):
