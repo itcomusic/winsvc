@@ -36,7 +36,8 @@ func main() {
 		DisplayName:      "Go HTTP server",
 		Description:      "Go HTTP server example",
 		RestartOnFailure: time.Second * 5, // restart service after failure
-	}, func(ctx context.Context) error {
+	}, winsvc.Flag("run"),
+	func(ctx context.Context) error {
 		app := New()
 
 		return app.Run(ctx)

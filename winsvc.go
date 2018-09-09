@@ -7,7 +7,6 @@ package winsvc
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -24,6 +23,8 @@ import (
 )
 
 var (
+	// errCmd is an error return by unknown command of the winsvc.
+	errCmd = errors.New("unknown command")
 	// errEmptyName is an error returned by invalid config of service name.
 	errEmptyName = errors.New("name field is required")
 	// errSvcInit is an error returned by action with not initialized service.
@@ -46,7 +47,7 @@ func Interactive() bool {
 	return interactive
 }
 
-var funcInit = func() {
+func init() {
 	ex, errEx := os.Executable()
 	if errEx != nil {
 		panic(errEx)
@@ -63,33 +64,6 @@ var funcInit = func() {
 	}
 
 	timeStopDefault = getStopTimeout()
-
-	// interactive true must explicitly specify the command -winsvc with correct command otherwise prints help
-	if Interactive() {
-		action = cmd{
-			typeCmd: cmdHelp,
-			handler: func() error {
-				flagSvc.SetOutput(os.Stdout)
-				flagSvc.PrintDefaults()
-				return nil
-			},
-		}
-
-		// flags
-		flagSvc.SetOutput(ioutil.Discard)
-		flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
-		flagSvc.Parse(os.Args[1:])
-
-		if action.typeCmd == cmdHelp {
-			action.handler()
-			os.Exit(1)
-		}
-		return
-	}
-}
-
-func init() {
-	//funcInit()
 }
 
 // getStopTimeout fetches the time before process will be finished.
@@ -185,9 +159,13 @@ type manager struct {
 // runFunc should not call os.Exit directly in the function, it is not correctly service stop and service will be
 // restarted if "RestartOnFailure" option is enabled.
 // Context canceled it is mean that signal of stop got and need to stop run function.
-func Init(c Config, run runFunc) error {
+func Init(c Config, cmd command, run runFunc) error {
+	if !Interactive() {
+		cmd = CmdRun
+	}
+
 	if len(c.Name) == 0 {
-		log.Fatal(errEmptyName)
+		log.Fatalf("winsvc: %s", errEmptyName)
 	}
 
 	if c.TimeoutStop == 0 {
@@ -203,7 +181,7 @@ func Init(c Config, run runFunc) error {
 		},
 	}
 
-	return runCmd()
+	return runCmd(cmd)
 }
 
 func (m *manager) setError(err error) {
