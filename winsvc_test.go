@@ -11,11 +11,7 @@ import (
 	"time"
 )
 
-func init() {
-	action = cmd{value:"run", typeCmd: cmdRun, handler: run}
-}
-
-func TestRunInterrupt(t *testing.T) {
+func TestInteractive_RunInterrupt(t *testing.T) {
 	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) {
 		time.AfterFunc(time.Second*2, func() {
 			c <- os.Interrupt
@@ -32,6 +28,7 @@ func TestRunInterrupt(t *testing.T) {
 	}()
 
 	err := Init(Config{Name: "test"},
+		CmdRun,
 		func(ctx context.Context) error {
 			<-ctx.Done()
 			cancelTest()
@@ -43,7 +40,7 @@ func TestRunInterrupt(t *testing.T) {
 	}
 }
 
-func TestRunCancelFunc(t *testing.T) {
+func TestInteractive_RunReturn(t *testing.T) {
 	signalNotify = signal.Notify
 	go func() {
 		select {
@@ -52,15 +49,15 @@ func TestRunCancelFunc(t *testing.T) {
 		}
 	}()
 
-	err := Init(Config{Name: "test"}, func(_ context.Context) error { return nil })
+	err := Init(Config{Name: "test"}, CmdRun, func(_ context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestReturnError(t *testing.T) {
+func TestInteractive_RunReturnError(t *testing.T) {
 	signalNotify = signal.Notify
-	err := Init(Config{Name: "test"}, func(_ context.Context) error { return fmt.Errorf("test error") })
+	err := Init(Config{Name: "test"}, CmdRun, func(_ context.Context) error { return fmt.Errorf("test error") })
 	if err != nil && err.Error() != "test error" {
 		t.Fatal(err)
 	}

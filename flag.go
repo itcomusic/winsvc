@@ -3,7 +3,6 @@
 package winsvc
 
 import (
-	"flag"
 	"log"
 	"os"
 )
@@ -11,68 +10,58 @@ import (
 type command int
 
 const (
-	cmdHelp command = iota
-	cmdStart
-	cmdStop
-	cmdRestart
-	cmdInstall
-	cmdUninstall
-	cmdRun
+	cmdUnknown command = iota
+	CmdStart
+	CmdStop
+	CmdRestart
+	CmdInstall
+	CmdUninstall
+	CmdRun
 )
 
-// actionHandler is a list valid actions and functions to use in cmdHandler
-var actionHandler = map[string]struct {
-	f   func() error
-	cmd command
-}{
-	"start":     {start, cmdStart},
-	"stop":      {stop, cmdStop},
-	"restart":   {restart, cmdRestart},
-	"install":   {install, cmdInstall},
-	"uninstall": {uninstall, cmdUninstall},
-	"run":       {run, cmdRun},
-}
-
-type cmd struct {
-	value   string
-	typeCmd command
-	handler func() error
-}
-
-func (c *cmd) Set(v string) error {
-	h, ok := actionHandler[v]
-	if !ok {
-		c.value = v
-		return nil
+func Flag(action string) command {
+	switch action {
+	case "start":
+		return CmdStart
+	case "stop":
+		return CmdStop
+	case "restart":
+		return CmdRestart
+	case "install":
+		return CmdInstall
+	case "uninstall":
+		return CmdUninstall
+	case "run":
+		return CmdRun
+	default:
+		return cmdUnknown
 	}
-	c.value, c.typeCmd, c.handler = v, h.cmd, h.f
-
-	return nil
 }
 
-func (c *cmd) String() string {
-	return c.value
+// cmdHandler is a list valid actions and functions to use in cmdHandler
+var cmdHandler = map[command]func() error{
+	cmdUnknown:   func() error { return errCmd },
+	CmdStart:     start,
+	CmdStop:      stop,
+	CmdRestart:   restart,
+	CmdInstall:   install,
+	CmdUninstall: uninstall,
+	CmdRun:       run,
 }
-
-var (
-	flagSvc = flag.NewFlagSet("winsvc", flag.ContinueOnError)
-	action  = cmd{
-		typeCmd: cmdRun,
-		handler: run,
-	}
-)
 
 // runCmd executions command of the flag "winsvc".
-func runCmd() error {
-	switch action.typeCmd {
-	case cmdInstall, cmdUninstall, cmdStart, cmdStop, cmdRestart:
-		if err := action.handler(); err != nil {
+func runCmd(cmd command) error {
+	handler := cmdHandler[cmd]
+
+	switch cmd {
+	case cmdUnknown, CmdInstall, CmdUninstall, CmdStart, CmdStop, CmdRestart:
+		if err := handler(); err != nil {
 			log.Fatalf("winsvc: %s", err)
 		}
-		os.Exit(0)
-	case cmdRun:
-		return action.handler()
-	}
 
+		os.Exit(0)
+	case CmdRun:
+		return handler()
+	}
 	panic("unreachable code")
 }

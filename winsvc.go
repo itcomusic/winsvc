@@ -7,23 +7,23 @@ package winsvc
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/debug"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/itcomusic/winsvc/internal/svc/mgr"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 var (
+	// errCmd is an error return by unknown command of the winsvc.
+	errCmd = errors.New("unknown command")
 	// errEmptyName is an error returned by invalid config of service name.
 	errEmptyName = errors.New("name field is required")
 	// errSvcInit is an error returned by action with not initialized service.
@@ -63,29 +63,6 @@ func init() {
 	}
 
 	timeStopDefault = getStopTimeout()
-
-	// interactive true must explicitly specify the command -winsvc with correct command otherwise prints help
-	if Interactive() {
-		action = cmd{
-			typeCmd: cmdHelp,
-			handler: func() error {
-				flagSvc.SetOutput(os.Stdout)
-				flagSvc.PrintDefaults()
-				return nil
-			},
-		}
-
-		// flags
-		flagSvc.SetOutput(ioutil.Discard)
-		flagSvc.Var(&action, "winsvc", "Control the system service (install, start, restart, stop, uninstall)")
-		flagSvc.Parse(os.Args[1:])
-
-		if action.typeCmd == cmdHelp {
-			action.handler()
-			os.Exit(1)
-		}
-		return
-	}
 }
 
 // getStopTimeout fetches the time before process will be finished.
@@ -181,9 +158,13 @@ type manager struct {
 // runFunc should not call os.Exit directly in the function, it is not correctly service stop and service will be
 // restarted if "RestartOnFailure" option is enabled.
 // Context canceled it is mean that signal of stop got and need to stop run function.
-func Init(c Config, run runFunc) error {
+func Init(c Config, cmd command, run runFunc) error {
+	if !Interactive() {
+		cmd = CmdRun
+	}
+
 	if len(c.Name) == 0 {
-		log.Fatal(errEmptyName)
+		log.Fatalf("winsvc: %s", errEmptyName)
 	}
 
 	if c.TimeoutStop == 0 {
@@ -199,7 +180,7 @@ func Init(c Config, run runFunc) error {
 		},
 	}
 
-	return runCmd()
+	return runCmd(cmd)
 }
 
 func (m *manager) setError(err error) {
@@ -253,7 +234,6 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	finishRun, cancelRun := context.WithCancel(context.Background())
 	go func() {
 		defer cancelRun()
-		defer m.recoverer()
 		m.setError(m.svcHandler(m.ctxSvc))
 	}()
 	return finishRun.Done()
@@ -433,19 +413,6 @@ func restart() error {
 	return s.Start()
 }
 
-// recoverer recovers panic and prints error and stack trace in log.
-// With the option "RestartOnFailure" enabled: if panic happened in run function, service will not be restarted.
-func (m *manager) recoverer() {
-	if rvr := recover(); rvr != nil {
-		log.Printf("panic: %s\n\n%s", rvr, debug.Stack())
-		select {
-		case <-m.ctxSvc.Done():
-		default:
-			os.Exit(2)
-		}
-	}
-}
-
 // Execute manages status of the service.
 func (m *manager) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	const cmdAccepted = svc.AcceptStop | svc.AcceptShutdown
@@ -465,8 +432,8 @@ loop:
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-
 				m.cancelSvc() // cancel context svcHandler
+
 				select {
 				case <-finishRun:
 				case <-time.After(m.TimeoutStop):
