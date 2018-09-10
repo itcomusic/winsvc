@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -31,20 +32,21 @@ type Application struct {
 }
 
 func main() {
+	// the default value is used for skipping flag.ExitOnError when the service was started
 	winsvcf := flag.String("winsvc", "unknown", "Control the system service (install, start, restart, stop, uninstall)")
 	flag.Parse()
-    
+
 	err := winsvc.Init(winsvc.Config{
 		Name:             "GoHTTPServer",
 		DisplayName:      "Go HTTP server",
 		Description:      "Go HTTP server example",
 		RestartOnFailure: time.Second * 10, // restart service after failure
-    	}, winsvc.Flag(*winsvcf),
-	func(ctx context.Context) error {
-		app := New()
+	}, winsvc.Flag(*winsvcf),
+		func(ctx context.Context) error {
+			app := New()
 
-		return app.Run(ctx)
-	})
+			return app.Run(ctx)
+		})
 	log.Printf("[WARN] rest terminated, %s", err)
 }
 
