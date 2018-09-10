@@ -2,8 +2,8 @@
 Provides creating and running Go Windows Service
 
 ### Features
-- In package was set flag `winsvc` that control service (install, start, run, restart, stop, uninstall) and no need explicit realize flag and logic.
-`winsvc.Init(...)` reads `-winsvc` flag and execute specific command.
+- `winsvc.Init` has parameter `cmd` which can be get using `winsvc.Flag(action string)` action may be equals install, start, run, restart, stop, uninstall.
+`winsvc.Init(...)` reads `cmd` and execute specific command.
 - Restarts service on failure. `winsvc.Config` has parameter `RestartOnFailure` which not must equal zero value for restarting. If exit from run function had happened before context execution canceled (command of the stop was not sent) service also will be restarted.
 - `context.Context` for graceful self shutdown.
 - Kills process if it is stopping for a long time. `winsvc.Config` has parameter `TimeoutStop` which it default equals value setting in registry.
@@ -31,12 +31,16 @@ type Application struct {
 }
 
 func main() {
+	winsvcf := flag.String("winsvc", "unknown", "Control the system service (install, start, restart, stop, uninstall)")
+	flag.Parse()
+    
 	err := winsvc.Init(winsvc.Config{
 		Name:             "GoHTTPServer",
 		DisplayName:      "Go HTTP server",
 		Description:      "Go HTTP server example",
-		RestartOnFailure: time.Second * 5, // restart service after failure
-	}, func(ctx context.Context) error {
+		RestartOnFailure: time.Second * 10, // restart service after failure
+    	}, winsvc.Flag(*winsvcf),
+	func(ctx context.Context) error {
 		app := New()
 
 		return app.Run(ctx)
