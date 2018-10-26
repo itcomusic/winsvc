@@ -2,15 +2,13 @@
 Provides creating and running Go Windows Service
 
 ### Features
-- `winsvc.Init` has parameter `cmd` which can be get using `winsvc.Flag(action string)` action may be equals install, start, run, restart, stop, uninstall.
-`winsvc.Init(...)` reads `cmd` and execute specific command.
-- Restarts service on failure. `winsvc.Config` has parameter `RestartOnFailure` which not must equal zero value for restarting. 
+- Restarts service on failure.
 Service will be restart only this situations:  
-*Threw panic*  
-*Exit from run function had happened before context execution canceled (command of the stop was not sent)*  
-*Service got command of the stop but it has caught panic after (os.exit != 0)* 
+1.*Threw panic*
+2.*Exit from run function had happened before context execution canceled (command of the stop was not sent)*
+3.*Service had got command of the stop but it caught panic after*
 - `context.Context` for graceful self shutdown.
-- Kills process if it is stopping for a long time. `winsvc.Config` has parameter `TimeoutStop` which it default equals value setting in registry.
+- Kills process if it is stopping for a long time. `TimeoutStop` which it default equals value setting in registry.
 - Package uses os.Chdir for easy using relative path. 
 
 ### Install
@@ -18,38 +16,14 @@ Service will be restart only this situations:
 
 ### Example
 ```go
-package main
-
-import (
-	"context"
-	"flag"
-	"log"
-	"net/http"
-	"os"
-	"time"
-
-	"github.com/itcomusic/winsvc"
-)
-
 type Application struct {
 	srv *http.Server
 }
 
 func main() {
-	// the default value is used for skipping flag.ExitOnError when the service was started
-	winsvcf := flag.String("winsvc", "unknown", "Control the system service (install, start, restart, stop, uninstall)")
-	flag.Parse()
-
-	err := winsvc.Init(winsvc.Config{
-		Name:             "GoHTTPServer",
-		DisplayName:      "Go HTTP server",
-		Description:      "Go HTTP server example",
-		RestartOnFailure: time.Second * 10, // restart service after failure
-	},
-	winsvc.Flag(*winsvcf),
-	func(ctx context.Context) error {
+	err := winsvc.Run(func(ctx context.Context) error {
 		app := New()
-		
+
 		return app.Run(ctx)
 	})
 	log.Printf("[WARN] rest terminated, %s", err)
@@ -75,7 +49,6 @@ func New() *Application {
 
 func (a *Application) Run(ctx context.Context) error {
 	log.Print("[INFO] started rest")
-
 	go func() {
 		defer log.Print("[WARN] shutdown rest server")
 		// shutdown on context cancellation
@@ -87,9 +60,10 @@ func (a *Application) Run(ctx context.Context) error {
 	log.Printf("[INFO] started http server on port :%d", 8080)
 	return a.srv.ListenAndServe()
 }
-
 ```
+### Using sc.exe
 ```sh
-$ goservice.exe -winsvc install
-$ goservice.exe -winsvc start
+$ sc.exe create "gowinsvc" binPath= "...winsvc.exe" start= auto
+$ sc.exe failure "gowinsvc" reset= 0 actions= restart/5000
+$ sc.exe description "gowinsvc" "description gowinsvc"
 ```

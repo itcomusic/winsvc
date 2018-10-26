@@ -27,8 +27,7 @@ func TestInteractive_RunInterrupt(t *testing.T) {
 		}
 	}()
 
-	err := Init(Config{Name: "test"},
-		CmdRun,
+	err := Run(
 		func(ctx context.Context) error {
 			<-ctx.Done()
 			cancelTest()
@@ -49,7 +48,7 @@ func TestInteractive_RunReturn(t *testing.T) {
 		}
 	}()
 
-	err := Init(Config{Name: "test"}, CmdRun, func(_ context.Context) error { return nil })
+	err := Run(func(_ context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +56,7 @@ func TestInteractive_RunReturn(t *testing.T) {
 
 func TestInteractive_RunReturnError(t *testing.T) {
 	signalNotify = signal.Notify
-	err := Init(Config{Name: "test"}, CmdRun, func(_ context.Context) error { return fmt.Errorf("test error") })
+	err := Run(func(_ context.Context) error { return fmt.Errorf("test error") })
 	if err != nil && err.Error() != "test error" {
 		t.Fatal(err)
 	}
