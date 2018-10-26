@@ -139,6 +139,7 @@ func (m *manager) run() {
 	select {
 	case <-finishRun:
 	case <-time.After(TimeoutStop):
+		setError(errTimeout)
 	}
 }
 
