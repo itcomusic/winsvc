@@ -17,18 +17,19 @@ import (
 )
 
 var (
-	srErr error
-	start sync.Once
-)
+	runErr = &errorSvc{
+		sync.RWMutex{},
+		nil,
+	}
+	runOnce sync.Once
 
-var (
 	// variable signal.Notify function for mock and tests.
 	signalNotify = signal.Notify
 	interactive  = false
 	// TimeoutStop is a field to specify timeout of stopping service in milliseconds.
 	// After expired timeout, process of service will be terminated.
-	// If is not set option, value will be equal default value 10000 .
-	TimeoutStop = time.Millisecond * 10000
+	// If is not set option, value will be equal default value 10s .
+	TimeoutStop = time.Second * 10
 )
 
 // Interactive returns false if running under the OS service manager and true otherwise.
@@ -53,7 +54,7 @@ func init() {
 	}
 }
 
-// runFunc is the function that can start as windows service.
+// runFunc is the function that can runOnce as windows service.
 //
 //   1. OS service manager executes user program.
 //   2. User program sees it is executed from a service manager (when Interactive() is false).
@@ -75,7 +76,6 @@ type manager struct {
 	svcHandler runFunc
 	ctxSvc     context.Context
 	cancelSvc  context.CancelFunc
-	errRun     *errorSvc
 	// svcHandler.Handler is controlled OS service manager
 	svc.Handler
 }
@@ -83,47 +83,41 @@ type manager struct {
 // Run initializes new windows service and runs command action.
 // runFunc provides a place to initiate the service.
 // runFunc function always has blocked and exit from it, means that service will be stopped correctly if is context was canceled.
-// runFunc should not call os.Exit directly in the function, it is not correctly service stop and service will be
-// restarted if "RestartOnFailure" option is enabled.
+// runFunc should not call os.Exit directly in the function, it is not correctly service stop.
 // Context canceled it is mean that signal of stop got and need to stop run function.
 func Run(r runFunc) error {
-	start.Do(func() {
+	runOnce.Do(func() {
 		svcMan := &manager{
 			svcHandler: r,
-			errRun: &errorSvc{
-				sync.RWMutex{},
-				nil,
-			},
 		}
-		srErr = svcMan.run()
+		svcMan.run()
 	})
 
-	return srErr
+	return getError()
 }
 
-func (m *manager) setError(err error) {
-	m.errRun.Lock()
-	defer m.errRun.Unlock()
-	m.errRun.err = err
+func setError(err error) {
+	runErr.Lock()
+	defer runErr.Unlock()
+	runErr.err = err
 }
 
-func (m *manager) getError() error {
-	m.errRun.RLock()
-	defer m.errRun.RUnlock()
-	return m.errRun.err
+func getError() error {
+	runErr.RLock()
+	defer runErr.RUnlock()
+	return runErr.err
 }
 
 // run starts service.
-func (m *manager) run() error {
+func (m *manager) run() {
 	m.ctxSvc, m.cancelSvc = context.WithCancel(context.Background())
 
 	if !interactive {
 		errRun := svc.Run("", m)
-		if errSvc := m.getError(); errSvc != nil {
-			return errSvc
+		if errSvc := getError(); errSvc != nil {
+			return
 		}
-		m.setError(errRun)
-		return errRun
+		setError(errRun)
 	}
 	finishRun := m.runFuncWithNotify()
 
@@ -140,7 +134,6 @@ func (m *manager) run() error {
 	case <-finishRun:
 	case <-time.After(TimeoutStop):
 	}
-	return m.getError()
 }
 
 // runFuncWithNotify returns context which will done when run function is stopped.
@@ -148,7 +141,7 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	finishRun, cancelRun := context.WithCancel(context.Background())
 	go func() {
 		defer cancelRun()
-		m.setError(m.svcHandler(m.ctxSvc))
+		setError(m.svcHandler(m.ctxSvc))
 	}()
 	return finishRun.Done()
 }
