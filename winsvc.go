@@ -6,6 +6,7 @@ package winsvc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +15,10 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows/svc"
+)
+
+var (
+	errTimeout = errors.New("winsvc: timeout stopping service")
 )
 
 var (
@@ -28,8 +33,8 @@ var (
 	interactive  = false
 	// TimeoutStop is a field to specify timeout of stopping service in milliseconds.
 	// After expired timeout, process of service will be terminated.
-	// If is not set option, value will be equal default value 10s .
-	TimeoutStop = time.Second * 10
+	// If is not set option, value will be equal default value 20s .
+	TimeoutStop = time.Second * 20
 )
 
 // Interactive returns false if running under the OS service manager and true otherwise.
@@ -118,6 +123,7 @@ func (m *manager) run() {
 			return
 		}
 		setError(errRun)
+		return
 	}
 	finishRun := m.runFuncWithNotify()
 
@@ -169,6 +175,7 @@ loop:
 				select {
 				case <-finishRun:
 				case <-time.After(TimeoutStop):
+					setError(errTimeout)
 				}
 				break loop
 			}

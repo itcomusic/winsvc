@@ -8,7 +8,7 @@ Service will be restarted:
 2.*Exit from run function had happened before context execution canceled (command of the stop was not sent)*  
 3.*Service had got command of the stop but it caught panic after*
 - `context.Context` for graceful self shutdown.
-- Kills process if it is stopping for a long time. `TimeoutStop` which it default equals value 10s.
+- Exit from winsvc.Run if it is stopping for a long time. `TimeoutStop` which it default equals value 20s.
 - Package uses os.Chdir for easy using relative path. 
 
 ### Install
