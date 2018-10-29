@@ -7,7 +7,7 @@ Provides creating and running Go Windows Service
 2.*Exit from run function had happened before context execution canceled (command of the stop was not sent)*  
 3.*Service had got command of the stop but it caught panic after*
 - `context.Context` for graceful self shutdown
-- Exit from winsvc.Run if it is stopping for a long time. `TimeoutStop` which it default equals value 20s
+- Returns from winsvc.Run if it is stopping for a long time. `TimeoutStop` which it default equals value 20s
 - Package uses os.Chdir for easy using relative path
 
 ### Install
@@ -15,17 +15,32 @@ Provides creating and running Go Windows Service
 
 ### Example
 ```go
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/itcomusic/winsvc"
+)
+
 type Application struct {
 	srv *http.Server
 }
 
 func main() {
-	err := winsvc.Run(func(ctx context.Context) error {
+	winsvc.Run(func(ctx context.Context) {
 		app := New()
-
-		return app.Run(ctx)
+		if err := app.Run(ctx); err != nil {
+			log.Printf("[ERROR] rest terminated with error, %s", err)
+			return
+		}
+		log.Printf("[WARN] rest terminated")
 	})
-	log.Printf("[WARN] rest terminated, %s", err)
+	// service has been just stopped, but process go has not stopped yet that is why recommendation is to not write any logic
 }
 
 func New() *Application {
@@ -48,6 +63,7 @@ func New() *Application {
 
 func (a *Application) Run(ctx context.Context) error {
 	log.Print("[INFO] started rest")
+
 	go func() {
 		defer log.Print("[WARN] shutdown rest server")
 		// shutdown on context cancellation

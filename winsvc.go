@@ -6,7 +6,6 @@ package winsvc
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,16 +17,7 @@ import (
 )
 
 var (
-	errTimeout = errors.New("winsvc: timeout stopping service")
-)
-
-var (
-	runErr = &errorSvc{
-		sync.RWMutex{},
-		nil,
-	}
 	runOnce sync.Once
-
 	// variable signal.Notify function for mock and tests.
 	signalNotify = signal.Notify
 	interactive  = false
@@ -70,7 +60,7 @@ func init() {
 //   7. Context was canceled.
 //   8. winsvc.Run returns.
 //   9. User program should quickly exit.
-type runFunc func(ctx context.Context) error
+type runFunc func(ctx context.Context)
 
 type errorSvc struct {
 	sync.RWMutex
@@ -90,27 +80,13 @@ type manager struct {
 // runFunc function always has blocked and exit from it, means that service will be stopped correctly if is context was canceled.
 // runFunc should not call os.Exit directly in the function, it is not correctly service stop.
 // Context canceled it is mean that signal of stop got and need to stop run function.
-func Run(r runFunc) error {
+func Run(r runFunc) {
 	runOnce.Do(func() {
 		svcMan := &manager{
 			svcHandler: r,
 		}
 		svcMan.run()
 	})
-
-	return getError()
-}
-
-func setError(err error) {
-	runErr.Lock()
-	defer runErr.Unlock()
-	runErr.err = err
-}
-
-func getError() error {
-	runErr.RLock()
-	defer runErr.RUnlock()
-	return runErr.err
 }
 
 // run starts service.
@@ -119,10 +95,9 @@ func (m *manager) run() {
 
 	if !interactive {
 		errRun := svc.Run("", m)
-		if errSvc := getError(); errSvc != nil {
-			return
+		if errRun != nil {
+			panic(errRun)
 		}
-		setError(errRun)
 		return
 	}
 	finishRun := m.runFuncWithNotify()
@@ -139,7 +114,6 @@ func (m *manager) run() {
 	select {
 	case <-finishRun:
 	case <-time.After(TimeoutStop):
-		setError(errTimeout)
 	}
 }
 
@@ -148,7 +122,7 @@ func (m *manager) runFuncWithNotify() <-chan struct{} {
 	finishRun, cancelRun := context.WithCancel(context.Background())
 	go func() {
 		defer cancelRun()
-		setError(m.svcHandler(m.ctxSvc))
+		m.svcHandler(m.ctxSvc)
 	}()
 	return finishRun.Done()
 }
@@ -176,7 +150,6 @@ loop:
 				select {
 				case <-finishRun:
 				case <-time.After(TimeoutStop):
-					setError(errTimeout)
 				}
 				break loop
 			}
