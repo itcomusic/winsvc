@@ -40,7 +40,8 @@ func main() {
 		}
 		log.Printf("[WARN] rest terminated")
 	})
-	// service has been just stopped, but process go has not stopped yet that is why recommendation is to not write any logic
+	// service has been just stopped, but process go has not stopped yet 
+	// that is why recommendation is to not write any logic
 }
 
 func New() *Application {
@@ -80,5 +81,4 @@ func (a *Application) Run(ctx context.Context) error {
 ```sh
 $ sc.exe create "gowinsvc" binPath= "...\winsvc.exe" start= auto
 $ sc.exe failure "gowinsvc" reset= 0 actions= restart/5000
-$ sc.exe description "gowinsvc" "description gowinsvc"
 ```

@@ -23,7 +23,7 @@ var (
 	interactive  = false
 	// TimeoutStop is a field to specify timeout of stopping service in milliseconds.
 	// After expired timeout, process of service will be terminated.
-	// If is not set option, value will be equal default value 20s .
+	// If is not set option, value will be equal default value 20s.
 	TimeoutStop = time.Second * 20
 )
 
