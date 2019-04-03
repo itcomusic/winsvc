@@ -21,7 +21,7 @@ func TestInteractive_RunInterrupt(t *testing.T) {
 	go func() {
 		select {
 		case <-time.After(time.Second * 5):
-			t.Fatal("service has not been stopped")
+			panic("service has not been stopped")
 		case <-ctxTest.Done():
 		}
 	}()
@@ -35,11 +35,9 @@ func TestInteractive_RunInterrupt(t *testing.T) {
 func TestInteractive_RunReturn(t *testing.T) {
 	signalNotify = signal.Notify
 	go func() {
-		select {
-		case <-time.After(time.Second * 5):
-			t.Fatal("service has not been stopped")
-		}
+		<-time.After(time.Second * 5)
+		panic("service has not been stopped")
 	}()
 
-	Run(func(_ context.Context) { return })
+	Run(func(_ context.Context) {})
 }

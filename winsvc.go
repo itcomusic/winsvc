@@ -62,11 +62,6 @@ func init() {
 //   9. User program should quickly exit.
 type runFunc func(ctx context.Context)
 
-type errorSvc struct {
-	sync.RWMutex
-	err error
-}
-
 type manager struct {
 	svcHandler runFunc
 	ctxSvc     context.Context
@@ -109,6 +104,7 @@ func (m *manager) run() {
 	case <-sig:
 		m.cancelSvc()
 	case <-finishRun:
+		panic("exit from run function")
 	}
 
 	select {
@@ -138,7 +134,7 @@ loop:
 	for {
 		select {
 		case <-finishRun:
-			panic("unexpected exit from run function")
+			panic("exit from run function")
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Interrogate:

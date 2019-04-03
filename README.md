@@ -3,12 +3,15 @@ Provides creating and running Go Windows Service
 
 ### Features
 - Restarts service on failure. Service will be restarted:  
-1.*Threw panic*  
-2.*Exit from run function had happened before context execution canceled (command of the stop was not sent)*  
-3.*Service had got command of the stop but it caught panic after*
+
+  1. Threw panic
+
+  2. Exit from run function had happened before context execution canceled (command of the stop was not sent) 
+
+  3. Service had got command but it caught panic
 - `context.Context` for graceful self shutdown
-- Returns from winsvc.Run if it is stopping for a long time. `TimeoutStop` which it default equals value 20s
-- Package uses os.Chdir for easy using relative path
+- Returns from `winsvc.Run` if it stops for a long time.  `svc.TimeoutStop` which it default equals value 20s
+- Package uses `os.Chdir `for easy using relative path
 
 ### Install
 ```go get -u github.com/itcomusic/winsvc```
@@ -40,26 +43,31 @@ func main() {
 		}
 		log.Printf("[WARN] rest terminated")
 	})
-	// service has been just stopped, but process go has not stopped yet 
+	// service has been just stopped, but process of the go has not stopped yet
 	// that is why recommendation is to not write any logic
 }
 
 func New() *Application {
 	mux := http.NewServeMux()
-
+	server := &http.Server{
+		Addr:    "0.0.0.0:8080",
+		Handler: mux,
+	}
+	
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Write([]byte("hello winsvc"))
 	})
-	mux.HandleFunc("/fail", func(w http.ResponseWriter, r *http.Request) {
-		// will be restarted
+	mux.HandleFunc("/exit", func(w http.ResponseWriter, r *http.Request) {
+		// service will be restarted
 		os.Exit(1)
 	})
-
-	return &Application{srv: &http.Server{
-		Addr:    "0.0.0.0:8080",
-		Handler: mux,
-	}}
+	mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
+		// service will be restarted
+		server.Shutdown(context.TODO())
+	})
+    
+	return &Application{srv: server}
 }
 
 func (a *Application) Run(ctx context.Context) error {
@@ -79,6 +87,6 @@ func (a *Application) Run(ctx context.Context) error {
 ```
 ### Using sc.exe
 ```sh
-$ sc.exe create "gowinsvc" binPath= "...\winsvc.exe" start= auto
+$ sc.exe create "gowinsvc" binPath= "path\gowinsvc.exe" start= auto
 $ sc.exe failure "gowinsvc" reset= 0 actions= restart/5000
 ```
