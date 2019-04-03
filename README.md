@@ -10,8 +10,8 @@ Provides creating and running Go Windows Service
 
   3. Service had got command but it caught panic
 - `context.Context` for graceful self shutdown
-- Returns from `winsvc.Run` if it stops for a long time.  `svc.TimeoutStop` which it default equals value 20s
-- Package uses `os.Chdir `for easy using relative path
+- Returns from `winsvc.Run` if it stops for a long time. `svc.TimeoutStop` which it default equals value 20s
+- Package uses `os.Chdir` for easy using relative path
 
 ### Install
 ```go get -u github.com/itcomusic/winsvc```
