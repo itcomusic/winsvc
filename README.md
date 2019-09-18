@@ -7,7 +7,7 @@ Provides creating and running Go Windows Service
   2. Exit from run function had happened before context execution canceled (command of the stop was not sent) 
   3. Service had got command but it caught panic
 - `context.Context` for graceful self shutdown
-- Returns from `winsvc.Run` if it stops for a long time. `svc.TimeoutStop` which it default equals value 20s
+- Returns from `winsvc.Run` if it stops for a long time. `winsvc.TimeoutStop` is option which it default equals value 20s
 - Package uses `os.Chdir` for easy using relative path
 
 ### Install
