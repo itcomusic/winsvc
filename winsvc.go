@@ -16,21 +16,27 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-var (
-	runOnce sync.Once
-	// variable signal.Notify function for mock and tests.
-	signalNotify = signal.Notify
-	interactive  = false
-	// TimeoutStop is a field to specify timeout of stopping service in milliseconds.
-	// After expired timeout, process of service will be terminated.
-	// If is not set option, value will be equal default value 20s.
-	TimeoutStop = time.Second * 20
+type (
+	option func(*manager)
+
+	// runFunc is the function that can runOnce as windows service.
+	//
+	//   1. OS service manager executes user program.
+	//   2. User program sees it is executed from a service manager (when Interactive() is false).
+	//   3. User program calls winsvc.Run(...) which is blocked.
+	//   4. runFunc is called.
+	//   5. User program runs.
+	//   6. OS service manager signals the user program to stop.
+	//   7. Context was canceled.
+	//   8. winsvc.Run returns.
+	//   9. User program should quickly exit.
+	runFunc func(ctx context.Context)
 )
 
-// Interactive returns false if running under the OS service manager and true otherwise.
-func Interactive() bool {
-	return interactive
-}
+var (
+	runOnce     sync.Once
+	interactive = false
+)
 
 func init() {
 	ex, errEx := os.Executable()
@@ -49,25 +55,46 @@ func init() {
 	}
 }
 
-// runFunc is the function that can runOnce as windows service.
-//
-//   1. OS service manager executes user program.
-//   2. User program sees it is executed from a service manager (when Interactive() is false).
-//   3. User program calls winsvc.Run(...) which is blocked.
-//   4. runFunc is called.
-//   5. User program runs.
-//   6. OS service manager signals the user program to stop.
-//   7. Context was canceled.
-//   8. winsvc.Run returns.
-//   9. User program should quickly exit.
-type runFunc func(ctx context.Context)
+// Interactive returns false if running under the OS service manager and true otherwise.
+func Interactive() bool {
+	return interactive
+}
 
-type manager struct {
-	svcHandler runFunc
-	ctxSvc     context.Context
-	cancelSvc  context.CancelFunc
-	// svcHandler.Handler is controlled OS service manager
-	svc.Handler
+// TimeoutStop is a option to specify timeout of stopping service.
+// After expired timeout, process of service will be terminated.
+// If is not set option, value will be equal default value 20s.
+func TimeoutStop(t time.Duration) option {
+	return func(m *manager) {
+		m.timeout = t
+	}
+}
+
+// DisablePanic is a option to disabling panic when exit from run function.
+func DisablePanic() option {
+	return func(m *manager) {
+		m.disablePanic = true
+	}
+}
+
+// signalNotify is a option to mock.
+func signalNotify(f func(c chan<- os.Signal, sig ...os.Signal)) option {
+	return func(m *manager) {
+		m.signalNotify = f
+	}
+}
+
+// start starts a service. Separated from sync.One for tests.
+func start(r runFunc, opts ...option) {
+	svcMan := &manager{
+		svcHandler:   r,
+		timeout:      time.Second * 20,
+		signalNotify: signal.Notify,
+	}
+
+	for _, op := range opts {
+		op(svcMan)
+	}
+	svcMan.run()
 }
 
 // Run initializes new windows service and runs command action.
@@ -75,13 +102,18 @@ type manager struct {
 // runFunc function always has blocked and exit from it, means that service will be stopped correctly if is context was canceled.
 // runFunc should not call os.Exit directly in the function, it is not correctly service stop.
 // Context canceled it is mean that signal of stop got and need to stop run function.
-func Run(r runFunc) {
-	runOnce.Do(func() {
-		svcMan := &manager{
-			svcHandler: r,
-		}
-		svcMan.run()
-	})
+func Run(r runFunc, opts ...option) {
+	runOnce.Do(func() { start(r, opts...) })
+}
+
+type manager struct {
+	svcHandler   runFunc
+	ctxSvc       context.Context
+	cancelSvc    context.CancelFunc
+	svc.Handler  // svcHandler.Handler is controlled OS service manager
+	timeout      time.Duration
+	disablePanic bool
+	signalNotify func(c chan<- os.Signal, sig ...os.Signal) // for mock and tests.
 }
 
 // run starts service.
@@ -99,17 +131,20 @@ func (m *manager) run() {
 
 	// waiting interrupt signal in interactive mode or cancel context
 	sig := make(chan os.Signal, 1)
-	signalNotify(sig, os.Interrupt, syscall.SIGTERM)
+	m.signalNotify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-sig:
 		m.cancelSvc()
 	case <-finishRun:
-		panic("exit from run function")
+		if !m.disablePanic {
+			panic("exit from run function")
+		}
+		return
 	}
 
 	select {
 	case <-finishRun:
-	case <-time.After(TimeoutStop):
+	case <-time.After(m.timeout):
 	}
 }
 
@@ -134,7 +169,10 @@ loop:
 	for {
 		select {
 		case <-finishRun:
-			panic("exit from run function")
+			if !m.disablePanic {
+				panic("exit from run function")
+			}
+			return false, 1
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Interrogate:
@@ -145,7 +183,7 @@ loop:
 
 				select {
 				case <-finishRun:
-				case <-time.After(TimeoutStop):
+				case <-time.After(m.timeout):
 				}
 				break loop
 			}
